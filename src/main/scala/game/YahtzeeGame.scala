@@ -1,28 +1,156 @@
 package game
 
-import game.model.Player.Player
+import game.Room.sendToRoom
+import game.model.Player.{CombinationsDice, Player}
 import game.model._
+import io.circe.syntax.EncoderOps
+import server.model.{OutputMessage, SendToUser}
 
 import scala.util.Random
 
 trait Game {
   def diceRoll(x: Int): Int
 
-  def сalculationWeight(
-      player: Player,
-      combinations: String,
-      dice: Dice
-  ): (Combinations, Int)
+  def increaseStep(
+      dice: Dice,
+      bettor: Player,
+      room: String,
+      user: String
+  )(state: State): (State, Seq[OutputMessage])
 
-  def resultGame(player: Map[String, Player]): String
+  def increaseRound(
+      dice: Dice,
+      bettor: Player,
+      room: String,
+      user: String,
+      combinations: String
+  )(state: State): (State, Seq[OutputMessage])
 
 }
 
 object YahtzeeGame extends Game {
 
+  override def increaseStep(
+      dice: Dice,
+      bettor: Player,
+      room: String,
+      user: String
+  )(state: State): (State, Seq[OutputMessage]) = { //step
+    val DefaultStep = 3
+
+    val newDice = Dice.of(
+      diceRoll(dice.a),
+      diceRoll(dice.b),
+      diceRoll(dice.c),
+      diceRoll(dice.d),
+      diceRoll(dice.e)
+    )
+    if (bettor.step != DefaultStep) {
+      val newBettor = Player.of(
+        bettor.combinationsDice,
+        bettor.round,
+        bettor.step + 1
+      )
+
+      val updated = State(
+        state.userRooms,
+        state.roomMembers,
+        state.player + (user -> newBettor)
+      )
+
+      (
+        updated,
+        sendToRoom(
+          room,
+          newDice.asJson(Dice.encodeDice).toString()
+        )(updated.roomMembers)
+      )
+    } else
+      (
+        state,
+        Seq(
+          SendToUser(
+            user,
+            "You have spent all the rolls, choose a combination"
+          )
+        )
+      )
+  }
+
+  override def increaseRound(
+      dice: Dice,
+      bettor: Player,
+      room: String,
+      user: String,
+      combinations: String
+  )(state: State): (State, Seq[OutputMessage]) = {
+    //Round ++
+    val calculation =
+      calcWeight(bettor, combinations, dice)
+
+    if (calculation._2 != 0) {
+      if (bettor.round < 13) {
+        val combinationsDice = CombinationsDice.of(
+          calculation._1,
+          dice,
+          calculation._2
+        )
+        val newBettor = Player.of(
+          bettor.combinationsDice :+ combinationsDice,
+          bettor.round + 1,
+          0
+        )
+        val newRoomMembers =
+          state.roomMembers.getOrElse(room, Set()) - user
+
+        // val newPlayer = player - user
+        val updated = State(
+          state.userRooms,
+          state.roomMembers + (room -> (newRoomMembers + user)),
+          state.player + (user -> newBettor)
+        )
+
+        (
+          updated,
+          sendToRoom(
+            room,
+            Dice
+              .of(
+                diceRoll(0),
+                diceRoll(0),
+                diceRoll(0),
+                diceRoll(0),
+                diceRoll(0)
+              )
+              .asJson(Dice.encodeDice)
+              .toString()
+          )(updated.roomMembers)
+        )
+      } else {
+        determinationResult(
+          calculation._1,
+          dice,
+          calculation._2,
+          bettor,
+          room,
+          user
+        )(state)
+      }
+    } else
+      (
+        state,
+        Seq(
+          SendToUser(
+            user,
+            "This combination is impossible! Choose a combination, please"
+          )
+        )
+      )
+  }
+
   override def diceRoll(x: Int): Int = if (x == 0) Random.nextInt(6) + 1 else x
 
-  override def сalculationWeight(
+  private def calcWeight(
       player: Player,
       combinations: String,
       dice: Dice
@@ -75,7 +203,41 @@ object YahtzeeGame extends Game {
   private def chekCombinations(players: Player, combinations: String): Boolean =
     !players.combinationsDice.exists(x => x.combinations.name == combinations)
 
-  override def resultGame(player: Map[String, Player]): String = {
+  private def determinationResult(
+      combinations: Combinations,
+      dice: Dice,
+      weight: Int,
+      bettor: Player,
+      room: String,
+      user: String
+  )(state: State): (State, Seq[OutputMessage]) = {
+    val combinationsDice = CombinationsDice.of(
+      combinations,
+      dice,
+      weight
+    )
+    val newBettor = Player.of(
+      bettor.combinationsDice :+ combinationsDice,
+      bettor.round,
+      0
+    )
+    val updated = State(
+      state.userRooms,
+      state.roomMembers,
+      state.player + (user -> newBettor)
+    )
+
+    val newPlayer = state.player - user
+    (
+      updated,
+      sendToRoom(
+        room,
+        resultGame(newPlayer + (user -> newBettor))
+      )(updated.roomMembers)
+    )
+  }
+
+  private def resultGame(player: Map[String, Player]): String = {
     val countFinish = player.count(_._2.round == 13)
     if (countFinish == player.size) {
       val result: Map[String, Int] =

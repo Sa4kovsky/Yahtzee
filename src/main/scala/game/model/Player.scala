@@ -19,6 +19,7 @@ object Player {
   )
 
   object CombinationsDice {
+
     def of(
         combinations: Combinations = Nothing,
         dice: Dice = Dice.of(),
@@ -28,6 +29,7 @@ object Player {
   }
 
   object Player {
+
     def of(
         combinationsDice: List[CombinationsDice],
         round: Rounds = 1,

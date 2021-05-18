@@ -1,7 +1,7 @@
 package game
 
 import game.Room.{addToRoom, removeFromCurrentRoom, sendToRoom, sizeRoom}
-import game.YahtzeeGame.{diceRoll, resultGame, сalculationWeight}
+import game.YahtzeeGame.{diceRoll, increaseRound, increaseStep}
 import game.model.Player._
 import game.model.{Dice, Nothing}
 import io.circe.jawn
@@ -120,125 +120,14 @@ case class State(
                   case Right(value) =>
                     if (
                       value.a == 0 || value.b == 0 || value.c == 0 || value.d == 0 || value.e == 0 || combinations == Nothing.name
-                    ) {
-                      //step
-                      val dice = Dice.of(
-                        diceRoll(value.a),
-                        diceRoll(value.b),
-                        diceRoll(value.c),
-                        diceRoll(value.d),
-                        diceRoll(value.e)
+                    )
+                      increaseStep(value, bettor, room, user)(
+                        State(userRooms, roomMembers, player)
                       )
-                      if (bettor.step != DefaultStep) {
-                        val newBettor = Player.of(
-                          bettor.combinationsDice,
-                          bettor.round,
-                          bettor.step + 1
-                        )
-
-                        val updated = State(
-                          userRooms,
-                          roomMembers,
-                          player + (user -> newBettor)
-                        )
-
-                        (
-                          updated,
-                          sendToRoom(
-                            room,
-                            dice.asJson(Dice.encodeDice).toString()
-                          )(updated.roomMembers)
-                        )
-                      } else
-                        (
-                          this,
-                          Seq(
-                            SendToUser(
-                              user,
-                              "You have spent all the rolls, choose a combination"
-                            )
-                          )
-                        )
-                    } else {
-                      //Round ++
-                      val calculation =
-                        сalculationWeight(bettor, combinations, value)
-
-                      if (calculation._2 != 0) {
-                        if (bettor.round < 13) {
-                          val combinationsDice = CombinationsDice.of(
-                            calculation._1,
-                            value,
-                            calculation._2
-                          )
-                          val newBettor = Player.of(
-                            bettor.combinationsDice :+ combinationsDice,
-                            bettor.round + 1,
-                            0
-                          )
-                          val newRoomMembers =
-                            roomMembers.getOrElse(room, Set()) - user
-
-                          // val newPlayer = player - user
-                          val updated = State(
-                            userRooms,
-                            roomMembers + (room -> (newRoomMembers + user)),
-                            player + (user -> newBettor)
-                          )
-
-                          (
-                            updated,
-                            sendToRoom(
-                              room,
-                              Dice
-                                .of(
-                                  diceRoll(0),
-                                  diceRoll(0),
-                                  diceRoll(0),
-                                  diceRoll(0),
-                                  diceRoll(0)
-                                )
-                                .asJson(Dice.encodeDice)
-                                .toString()
-                            )(updated.roomMembers)
-                          )
-                        } else {
-                          //result
-                          val combinationsDice = CombinationsDice.of(
-                            calculation._1,
-                            value,
-                            calculation._2
-                          )
-                          val newBettor = Player.of(
-                            bettor.combinationsDice :+ combinationsDice,
-                            bettor.round,
-                            0
-                          )
-                          val updated = State(
-                            userRooms,
-                            roomMembers,
-                            player + (user -> newBettor)
-                          )
-
-                          val newPlayer = player - user
-                          (
-                            updated,
-                            sendToRoom(
-                              room,
-                              resultGame(newPlayer + (user -> newBettor))
-                            )(updated.roomMembers)
-                          )
-                        }
-                      } else
-                        (
-                          this,
-                          Seq(
-                            SendToUser(
-                              user,
-                              "This combination is impossible! Choose a combination, please"
-                            )
-                          )
-                        )
+                    else {
+                      increaseRound(value, bettor, room, user, combinations)(
+                        State(userRooms, roomMembers, player)
+                      )
                     }
                   case Left(_) =>
                     (this, Seq(SendToUser(user, "What dice did you choose")))
