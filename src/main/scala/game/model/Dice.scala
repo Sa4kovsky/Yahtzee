@@ -1,3 +1,5 @@
+package game.model
+
 import io.circe._
 
 sealed abstract case class Dice private (a: Int, b: Int, c: Int, d: Int, e: Int)

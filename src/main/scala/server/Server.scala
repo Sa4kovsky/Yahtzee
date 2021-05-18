@@ -1,14 +1,18 @@
+package server
+
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ContextShift, ExitCode, Timer}
 import fs2.Stream
 import fs2.concurrent.{Queue, Topic}
-import org.http4s.implicits._
+import game.State
+import org.http4s.implicits.http4sKleisliResponseSyntaxOptionT
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
+import server.model._
 
-object GameServer {
+object Server {
   def stream[F[_]: ConcurrentEffect: Timer: ContextShift](
-      chatState: Ref[F, RoomState],
+      chatState: Ref[F, State],
       queue: Queue[F, InputMessage],
       topic: Topic[F, OutputMessage]
   ): Stream[F, ExitCode] =
@@ -16,7 +20,7 @@ object GameServer {
       .bindHttp(8080)
       .withHttpApp(
         Router(
-          "/" -> GameRoutes.routes[F](chatState, queue, topic)
+          "/" -> Routes.routes[F](chatState, queue, topic)
         ).orNotFound
       )
       .serve

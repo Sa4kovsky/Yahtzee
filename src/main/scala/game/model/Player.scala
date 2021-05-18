@@ -1,3 +1,5 @@
+package game.model
+
 object Player {
 
   private type Weight = Int

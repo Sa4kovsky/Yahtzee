@@ -2,20 +2,21 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.Stream
 import fs2.concurrent.{Queue, Topic}
+import game.State
+import server.Server
+import server.model._
 
 import scala.concurrent.duration.DurationInt
 
-case class State(messageCount: Int)
-
 object Main extends IOApp {
-  def run(args: List[String]) = {
+  def run(args: List[String]): IO[ExitCode] = {
     for (
       queue <- Queue.unbounded[IO, InputMessage];
       topic <- Topic[IO, OutputMessage](SendToUsers(Set.empty, ""));
-      ref <- Ref.of[IO, RoomState](RoomState());
+      ref <- Ref.of[IO, State](State());
 
       exitCode <- {
-        val httpStream = GameServer.stream[IO](ref, queue, topic)
+        val httpStream = Server.stream[IO](ref, queue, topic)
 
         val keepAlive = Stream
           .awakeEvery[IO](120.seconds)

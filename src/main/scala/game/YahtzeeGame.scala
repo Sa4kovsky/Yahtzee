@@ -1,4 +1,7 @@
-import Player.Player
+package game
+
+import game.model.Player.Player
+import game.model._
 
 import scala.util.Random
 
@@ -70,9 +73,7 @@ object YahtzeeGame extends Game {
   }
 
   private def chekCombinations(players: Player, combinations: String): Boolean =
-    players.combinationsDice
-      .find(x => x.combinations.name == combinations)
-      .isEmpty
+    !players.combinationsDice.exists(x => x.combinations.name == combinations)
 
   override def resultGame(player: Map[String, Player]): String = {
     val countFinish = player.count(_._2.round == 13)

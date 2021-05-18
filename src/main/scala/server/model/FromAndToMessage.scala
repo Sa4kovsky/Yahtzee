@@ -1,3 +1,5 @@
+package server.model
+
 sealed trait InputMessage {
   val user: String
 }

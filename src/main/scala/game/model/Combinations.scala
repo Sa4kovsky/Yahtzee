@@ -1,3 +1,5 @@
+package game.model
+
 trait Combinations {
   val name: String
 }

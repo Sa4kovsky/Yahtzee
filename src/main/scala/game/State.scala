@@ -1,37 +1,41 @@
-import Player._
-import YahtzeeGame.{diceRoll, resultGame, сalculationWeight}
+package game
+
+import game.Room.{addToRoom, removeFromCurrentRoom, sendToRoom, sizeRoom}
+import game.YahtzeeGame.{diceRoll, resultGame, сalculationWeight}
+import game.model.Player._
+import game.model.{Dice, Nothing}
 import io.circe.jawn
 import io.circe.syntax.EncoderOps
+import server.model._
 
-case class RoomState(
+case class State(
     userRooms: Map[String, String],
     roomMembers: Map[String, Set[String]],
     player: Map[String, Player]
 ) {
   val DefaultCountPlayerInRoom = 2
-  val DefaultCombinationsDice = CombinationsDice.of()
-  val DefaultPlayer = Player.of(List(DefaultCombinationsDice))
+
   val DefaultStep = 3
 
-  def process(msg: InputMessage): (RoomState, Seq[OutputMessage]) = msg match {
+  def process(msg: InputMessage): (State, Seq[OutputMessage]) = msg match {
     case Help(user) =>
       (this, Seq(SendToUser(user, InputMessage.HelpText)))
 
-    case Chat(user, text) => {
+    case Chat(user, text) =>
       userRooms.get(user) match {
         case Some(room) =>
-          (this, sendToRoom(room, s"$user: $text"))
+          (this, sendToRoom(room, s"$user: $text")(this.roomMembers))
 
         case None =>
           (this, Seq(SendToUser(user, "You are not currently in a room")))
       }
-    }
 
-    case EnterRoom(user, toRoom) => {
+    case EnterRoom(user, toRoom) =>
       userRooms.get(user) match {
         case None =>
           // Первый раз - добро пожаловать
-          val (finalState, enterMessages) = addToRoom(user, toRoom)
+          val (finalState, enterMessages) =
+            addToRoom(user, toRoom)(this)
 
           (finalState, Seq(WelcomeUser(user)) ++ enterMessages)
 
@@ -39,27 +43,28 @@ case class RoomState(
           (this, Seq(SendToUser(user, "You are already in that room!")))
 
         case Some(_) =>
-          if (sizeRoom(toRoom) >= DefaultCountPlayerInRoom)
+          if (sizeRoom(toRoom)(roomMembers) >= DefaultCountPlayerInRoom)
             (this, Seq(SendToUser(user, "The room is occupied")))
           else {
 
-            val (intermediateState, leaveMessages) = removeFromCurrentRoom(user)
+            val (intermediateState, leaveMessages) =
+              removeFromCurrentRoom(user)(
+                State(userRooms, roomMembers, player)
+              )
             val (finalState, enterMessages) =
-              intermediateState.addToRoom(user, toRoom)
+              addToRoom(user, toRoom)(intermediateState)
 
             (finalState, leaveMessages ++ enterMessages)
           }
       }
-    }
 
-    case ListRooms(user) => {
+    case ListRooms(user) =>
       val roomList = roomMembers.keys.toList.sorted
         .mkString("Rooms:\n\t", "\n\t", "")
 
       (this, Seq(SendToUser(user, roomList)))
-    }
 
-    case ListMembers(user) => {
+    case ListMembers(user) =>
       val memberList = userRooms.get(user) match {
         case Some(room) =>
           roomMembers
@@ -72,7 +77,6 @@ case class RoomState(
           "You are not currently in a room"
       }
       (this, Seq(SendToUser(user, memberList)))
-    }
 
     case StartGameInRoom(user) =>
       userRooms.get(user) match {
@@ -92,9 +96,15 @@ case class RoomState(
                   )
                   .asJson(Dice.encodeDice)
                   .toString()
+              )(this.roomMembers)
+            )
+          } else
+            (
+              this,
+              sendToRoom(room, "Choose or create another room")(
+                this.roomMembers
               )
             )
-          } else (this, sendToRoom(room, "Choose or create another room"))
         case None =>
           (this, Seq(SendToUser(user, "You are not currently in a room")))
       }
@@ -102,7 +112,8 @@ case class RoomState(
     case Round(user, dice, combinations) =>
       userRooms.get(user) match {
         case Some(room) =>
-          if (player.head._1 == user) {
+          val rooms: List[String] = roomMembers.getOrElse(room, List()).toList
+          if (user == rooms.head) {
             player.get(user) match {
               case Some(bettor) =>
                 jawn.decode(dice)(Dice.decodeDice) match {
@@ -110,6 +121,7 @@ case class RoomState(
                     if (
                       value.a == 0 || value.b == 0 || value.c == 0 || value.d == 0 || value.e == 0 || combinations == Nothing.name
                     ) {
+                      //step
                       val dice = Dice.of(
                         diceRoll(value.a),
                         diceRoll(value.b),
@@ -123,11 +135,11 @@ case class RoomState(
                           bettor.round,
                           bettor.step + 1
                         )
-                        val newPlayer = player - user
-                        val updated = RoomState(
+
+                        val updated = State(
                           userRooms,
                           roomMembers,
-                          newPlayer + (user -> newBettor)
+                          player + (user -> newBettor)
                         )
 
                         (
@@ -135,7 +147,7 @@ case class RoomState(
                           sendToRoom(
                             room,
                             dice.asJson(Dice.encodeDice).toString()
-                          )
+                          )(updated.roomMembers)
                         )
                       } else
                         (
@@ -148,9 +160,10 @@ case class RoomState(
                           )
                         )
                     } else {
-
+                      //Round ++
                       val calculation =
                         сalculationWeight(bettor, combinations, value)
+
                       if (calculation._2 != 0) {
                         if (bettor.round < 13) {
                           val combinationsDice = CombinationsDice.of(
@@ -163,31 +176,34 @@ case class RoomState(
                             bettor.round + 1,
                             0
                           )
-                          val newPlayer = player - user
-                          val updated = RoomState(
+                          val newRoomMembers =
+                            roomMembers.getOrElse(room, Set()) - user
+
+                          // val newPlayer = player - user
+                          val updated = State(
                             userRooms,
-                            roomMembers,
-                            newPlayer + (user -> newBettor)
+                            roomMembers + (room -> (newRoomMembers + user)),
+                            player + (user -> newBettor)
                           )
 
                           (
                             updated,
-                            updated
-                              .sendToRoom(
-                                room,
-                                Dice
-                                  .of(
-                                    diceRoll(0),
-                                    diceRoll(0),
-                                    diceRoll(0),
-                                    diceRoll(0),
-                                    diceRoll(0)
-                                  )
-                                  .asJson(Dice.encodeDice)
-                                  .toString()
-                              )
+                            sendToRoom(
+                              room,
+                              Dice
+                                .of(
+                                  diceRoll(0),
+                                  diceRoll(0),
+                                  diceRoll(0),
+                                  diceRoll(0),
+                                  diceRoll(0)
+                                )
+                                .asJson(Dice.encodeDice)
+                                .toString()
+                            )(updated.roomMembers)
                           )
                         } else {
+                          //result
                           val combinationsDice = CombinationsDice.of(
                             calculation._1,
                             value,
@@ -198,21 +214,19 @@ case class RoomState(
                             bettor.round,
                             0
                           )
-                          val newPlayer = player - user
-                          RoomState(userRooms, roomMembers, newPlayer)
-                          val updated = RoomState(
+                          val updated = State(
                             userRooms,
                             roomMembers,
-                            newPlayer + (user -> newBettor)
+                            player + (user -> newBettor)
                           )
 
+                          val newPlayer = player - user
                           (
                             updated,
-                            updated
-                              .sendToRoom(
-                                room,
-                                resultGame(newPlayer + (user -> newBettor))
-                              )
+                            sendToRoom(
+                              room,
+                              resultGame(newPlayer + (user -> newBettor))
+                            )(updated.roomMembers)
                           )
                         }
                       } else
@@ -242,59 +256,14 @@ case class RoomState(
       }
 
     case Disconnect(user) =>
-      removeFromCurrentRoom(user)
+      removeFromCurrentRoom(user)(State(userRooms, roomMembers, player))
 
     case InvalidInput(user, text) =>
       (this, Seq(SendToUser(user, s"Invalid input: $text")))
   }
 
-  private def removeFromCurrentRoom(
-      user: String
-  ): (RoomState, Seq[OutputMessage]) = userRooms.get(user) match {
-    case Some(room) =>
-      val nextMembers = roomMembers.getOrElse(room, Set()) - user
-      val nextState =
-        if (nextMembers.isEmpty)
-          RoomState(userRooms - user, roomMembers - room, player - user)
-        else
-          RoomState(
-            userRooms - user,
-            roomMembers + (room -> nextMembers),
-            player - user
-          )
-
-      (nextState, sendToRoom(room, s"$user has left $room"))
-    case None =>
-      (this, Nil)
-  }
-
-  private def sendToRoom(room: String, text: String): Seq[OutputMessage] = {
-    roomMembers
-      .get(room)
-      .map(SendToUsers(_, text))
-      .toSeq
-  }
-
-  private def addToRoom(
-      user: String,
-      room: String
-  ): (RoomState, Seq[OutputMessage]) = {
-    val nextMembers = roomMembers.getOrElse(room, Set()) + user
-    val nextState = RoomState(
-      userRooms + (user -> room),
-      roomMembers + (room -> nextMembers),
-      player + (user -> DefaultPlayer)
-    )
-
-    (nextState, nextState.sendToRoom(room, s"$user has joined $room"))
-  }
-
-  private def sizeRoom(toRoom: String): Int = roomMembers
-    .getOrElse(toRoom, Set())
-    .toList
-    .size
 }
 
-object RoomState {
-  def apply(): RoomState = RoomState(Map.empty, Map.empty, Map.empty)
+object State {
+  def apply(): State = State(Map.empty, Map.empty, Map.empty)
 }

@@ -1,20 +1,24 @@
+package server
+
 import cats.effect.concurrent.Ref
 import cats.effect.{ContextShift, Sync}
 import fs2.concurrent.{Queue, Topic}
 import fs2.{Pipe, Stream}
+import game.State
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{Close, Text}
+import server.model.{Disconnect, EnterRoom, InputMessage, OutputMessage}
 
-object GameRoutes {
+object Routes {
 
   def routes[F[_]: Sync: ContextShift](
-      chatState: Ref[F, RoomState],
+      chatState: Ref[F, State],
       queue: Queue[F, InputMessage],
       topic: Topic[F, OutputMessage]
-  ) = {
+  ): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}
     import dsl._
 
