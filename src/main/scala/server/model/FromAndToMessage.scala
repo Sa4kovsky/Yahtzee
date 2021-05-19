@@ -27,22 +27,21 @@ case class InvalidInput(user: String, text: String) extends InputMessage
 
 case class StartGameInRoom(user: String) extends InputMessage
 
-case class Round(user: String, dice: String, combinations: String)
-    extends InputMessage
+case class Round(user: String, combinations: String, dice: String) extends InputMessage
 
 case class WelcomeUser(user: String) extends OutputMessage {
   override def forUser(targetUser: String): Boolean = targetUser == user
-  override def toString: String = s"Welcome to Yahtzee"
+  override def toString: String                     = s"Welcome to Yahtzee"
 }
 
 case class SendToUser(user: String, text: String) extends OutputMessage {
   override def forUser(targetUser: String): Boolean = targetUser == user
-  override def toString: String = text
+  override def toString: String                     = text
 }
 
 case class SendToUsers(users: Set[String], text: String) extends OutputMessage {
   override def forUser(targetUser: String): Boolean = users.contains(targetUser)
-  override def toString: String = text
+  override def toString: String                     = text
 }
 
 object InputMessage {
@@ -69,21 +68,21 @@ object InputMessage {
       case ("/rooms", _, _)              => ListRooms(user)
       case ("/members", _, _)            => ListMembers(user)
       case ("/start", _, _)              => StartGameInRoom(user)
-      case ("/round", combination, dice) => Round(user, dice, combination)
+      case ("/round", combination, dice) => Round(user, combination, dice)
       case (s"/$cmd", _, _)              => InvalidInput(user, s"unknown command - $cmd")
       case _                             => Chat(user, text)
     }
 
   private def splitFirstTwoWords(text: String): (String, String, String) = {
     val (first, intermediate) = splitFirstWord(text)
-    val (second, rest) = splitFirstWord(intermediate)
+    val (second, rest)        = splitFirstWord(intermediate)
 
     (first, second, rest)
   }
 
   private def splitFirstWord(text: String): (String, String) = {
     val trimmedText = text.trim
-    val firstSpace = trimmedText.indexOf(' ')
+    val firstSpace  = trimmedText.indexOf(' ')
     if (firstSpace < 0)
       (trimmedText, "")
     else
@@ -96,5 +95,5 @@ object InputMessage {
 
 case object KeepAlive extends OutputMessage {
   override def forUser(targetUser: String) = true
-  override def toString: String = ""
+  override def toString: String            = ""
 }

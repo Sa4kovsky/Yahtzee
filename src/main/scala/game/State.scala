@@ -1,21 +1,13 @@
 package game
 
 import game.Room.{addToRoom, removeFromCurrentRoom, sendToRoom, sizeRoom}
-import game.YahtzeeGame.{diceRoll, increaseRound, increaseStep}
-import game.model.Player._
-import game.model.{Dice, Nothing}
-import io.circe.jawn
-import io.circe.syntax.EncoderOps
+import game.YahtzeeGame._
+import _root_.game.model.Player._
 import server.model._
 
-case class State(
-    userRooms: Map[String, String],
-    roomMembers: Map[String, Set[String]],
-    player: Map[String, Player]
-) {
+case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[String]], player: Map[String, Player]) {
   val DefaultCountPlayerInRoom = 2
-
-  val DefaultStep = 3
+  val DefaultStep              = 3
 
   def process(msg: InputMessage): (State, Seq[OutputMessage]) = msg match {
     case Help(user) =>
@@ -33,10 +25,7 @@ case class State(
     case EnterRoom(user, toRoom) =>
       userRooms.get(user) match {
         case None =>
-          // Первый раз - добро пожаловать
-          val (finalState, enterMessages) =
-            addToRoom(user, toRoom)(this)
-
+          val (finalState, enterMessages) = addToRoom(user, toRoom)(this)
           (finalState, Seq(WelcomeUser(user)) ++ enterMessages)
 
         case Some(currentRoom) if currentRoom == toRoom =>
@@ -46,22 +35,14 @@ case class State(
           if (sizeRoom(toRoom)(roomMembers) >= DefaultCountPlayerInRoom)
             (this, Seq(SendToUser(user, "The room is occupied")))
           else {
-
-            val (intermediateState, leaveMessages) =
-              removeFromCurrentRoom(user)(
-                State(userRooms, roomMembers, player)
-              )
-            val (finalState, enterMessages) =
-              addToRoom(user, toRoom)(intermediateState)
-
+            val (intermediateState, leaveMessages) = removeFromCurrentRoom(user)(this)
+            val (finalState, enterMessages)        = addToRoom(user, toRoom)(intermediateState)
             (finalState, leaveMessages ++ enterMessages)
           }
       }
 
     case ListRooms(user) =>
-      val roomList = roomMembers.keys.toList.sorted
-        .mkString("Rooms:\n\t", "\n\t", "")
-
+      val roomList = roomMembers.keys.toList.sorted.mkString("Rooms:\n\t", "\n\t", "")
       (this, Seq(SendToUser(user, roomList)))
 
     case ListMembers(user) =>
@@ -82,70 +63,33 @@ case class State(
       userRooms.get(user) match {
         case Some(room) =>
           if (room != "default") {
-            (
-              this,
-              sendToRoom(
-                room,
-                Dice
-                  .of(
-                    diceRoll(0),
-                    diceRoll(0),
-                    diceRoll(0),
-                    diceRoll(0),
-                    diceRoll(0)
-                  )
-                  .asJson(Dice.encodeDice)
-                  .toString()
-              )(this.roomMembers)
-            )
+            startGame(user, room, DefaultCountPlayerInRoom)(this)
           } else
-            (
-              this,
-              sendToRoom(room, "Choose or create another room")(
-                this.roomMembers
-              )
-            )
-        case None =>
-          (this, Seq(SendToUser(user, "You are not currently in a room")))
+            (this, sendToRoom(room, "Choose or create another room")(this.roomMembers))
+
+        case None => (this, Seq(SendToUser(user, "You are not currently in a room")))
       }
 
-    case Round(user, dice, combinations) =>
+    case Round(user, combinations, dice) =>
       userRooms.get(user) match {
         case Some(room) =>
-          val rooms: List[String] = roomMembers.getOrElse(room, List()).toList
-          if (user == rooms.head) {
+          val users: List[String] = roomMembers.getOrElse(room, List()).toList
+          if (user == users.head) {
             player.get(user) match {
               case Some(bettor) =>
-                jawn.decode(dice)(Dice.decodeDice) match {
-                  case Right(value) =>
-                    if (
-                      value.a == 0 || value.b == 0 || value.c == 0 || value.d == 0 || value.e == 0 || combinations == Nothing.name
-                    )
-                      increaseStep(value, bettor, room, user)(
-                        State(userRooms, roomMembers, player)
-                      )
-                    else {
-                      increaseRound(value, bettor, room, user, combinations)(
-                        State(userRooms, roomMembers, player)
-                      )
-                    }
-                  case Left(_) =>
-                    (this, Seq(SendToUser(user, "What dice did you choose")))
-                }
+                game(dice: String, bettor: Player, room: String, user: String, combinations: String)(this)
               case None =>
                 (this, Seq(SendToUser(user, "Player initialization error")))
             }
           } else {
             (this, Seq(SendToUser(user, "It's another player's turn now")))
           }
-
         case None =>
           (this, Seq(SendToUser(user, "You are not currently in a room")))
-
       }
 
     case Disconnect(user) =>
-      removeFromCurrentRoom(user)(State(userRooms, roomMembers, player))
+      removeFromCurrentRoom(user)(this)
 
     case InvalidInput(user, text) =>
       (this, Seq(SendToUser(user, s"Invalid input: $text")))
