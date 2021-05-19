@@ -40,6 +40,21 @@ object YahtzeeGame extends Game {
     } else (state, sendToRoom(room, "The room is designed for a larger number of people")(state.roomMembers))
   }
 
+  private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
+    x match {
+      case Some(value) => Some(value)
+      case None =>
+        Random.nextInt(6) + 1 match {
+          case 1 => Some(DiceSide.One)
+          case 2 => Some(DiceSide.Two)
+          case 3 => Some(DiceSide.Tree)
+          case 4 => Some(DiceSide.Four)
+          case 5 => Some(DiceSide.Five)
+          case 6 => Some(DiceSide.Six)
+          case _ => None
+        }
+    }
+
   private def countUser(room: String)(state: State): List[String] = state.roomMembers.getOrElse(room, List()).toList
 
   override def game(dice: String, bettor: Player, room: String, user: String, combinations: String)(
@@ -54,7 +69,7 @@ object YahtzeeGame extends Game {
         else {
           increaseRound(value, bettor, room, user, combinations)(state)
         }
-      case None => (state, Seq(SendToUser(user, "What dice did you choose")))
+      case None => increaseRound(Dice.of(), bettor, room, user, combinations)(state)
     }
 
   private def increaseStep(dice: Dice, bettor: Player, room: String, user: String)(
@@ -79,28 +94,13 @@ object YahtzeeGame extends Game {
       (state, Seq(SendToUser(user, "You have spent all the rolls, choose a combination")))
   }
 
-  private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
-    x match {
-      case Some(value) => Some(value)
-      case None =>
-        Random.nextInt(6) + 1 match {
-          case 1 => Some(DiceSide.One)
-          case 2 => Some(DiceSide.Two)
-          case 3 => Some(DiceSide.Tree)
-          case 4 => Some(DiceSide.Four)
-          case 5 => Some(DiceSide.Five)
-          case 6 => Some(DiceSide.Six)
-          case _ => None
-        }
-    }
-
   private def increaseRound(dice: Dice, bettor: Player, room: String, user: String, combinations: String)(
     state: State
   ): (State, Seq[OutputMessage]) = {
 
     val calculation = calcWeight(bettor, combinations, dice)
 
-    if (calculation._2 != 0) {
+    if (calculation._1 != Nothing) {
       if (bettor.round < 13) {
         val combinationsDice = CombinationsDice.of(calculation._1, dice, calculation._2)
         val newBettor        = Player.of(bettor.combinationsDice :+ combinationsDice, bettor.round + 1, 0)
@@ -127,40 +127,65 @@ object YahtzeeGame extends Game {
   }
 
   private def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
-    if (chekCombinations(player, combinations)) {
-      val values = List(dice.a.get.value, dice.b.get.value, dice.c.get.value, dice.d.get.value, dice.e.get.value).sorted
-      combinations match {
-        case Ones.name   => (Ones, values.count(_ == 1))
-        case Twos.name   => (Twos, values.count(_ == 2) * 2)
-        case Threes.name => (Threes, values.count(_ == 3) * 3)
-        case Fours.name  => (Fours, values.count(_ == 4) * 4)
-        case Fives.name  => (Fives, values.count(_ == 5) * 5)
-        case Sixes.name  => (Sixes, values.count(_ == 6) * 6)
-        case ThreeOfAKind.name =>
-          if (values.groupBy(identity).exists(_._2.length >= 3)) (ThreeOfAKind, values.sum) else (ThreeOfAKind, 0)
-        case FourOfAKind.name =>
-          if (values.groupBy(identity).exists(_._2.length >= 4)) (FourOfAKind, values.sum) else (FourOfAKind, 0)
-        case FullHouse.name =>
-          val grouped = values.groupBy(identity)
-          if (grouped.exists(_._2.length == 3) && grouped.size == 2) (FullHouse, 25) else (FullHouse, 0)
-        case SmallStraight.name =>
-          if (
-            values.containsSlice(Seq(1, 2, 3, 4))
-            || values.containsSlice(Seq(2, 3, 4, 5))
-            || values.containsSlice(Seq(3, 4, 5, 6))
-          ) (SmallStraight, 30)
-          else (SmallStraight, 0)
-        case LargeStraight.name =>
-          if (values == Seq(1, 2, 3, 4, 5) || values == Seq(2, 3, 4, 5, 6)) (LargeStraight, 40) else (LargeStraight, 0)
-        case Yahtzee.name => if (values.distinct.size == 1) (Yahtzee, 50) else (Yahtzee, 0)
-        case Chance.name  => (Chance, values.sum)
-        case _            => (Nothing, 0)
-      }
-    } else (Nothing, 0)
+    if (chekCombinations(player, combinations))
+      if (checkDice(dice).isDefined) {
+        val values =
+          List(dice.a.get.value, dice.b.get.value, dice.c.get.value, dice.d.get.value, dice.e.get.value).sorted
+        parsCombination(combinations) match {
+          case Ones   => (Ones, values.count(_ == 1))
+          case Twos   => (Twos, values.count(_ == 2) * 2)
+          case Threes => (Threes, values.count(_ == 3) * 3)
+          case Fours  => (Fours, values.count(_ == 4) * 4)
+          case Fives  => (Fives, values.count(_ == 5) * 5)
+          case Sixes  => (Sixes, values.count(_ == 6) * 6)
+          case ThreeOfAKind =>
+            if (values.groupBy(identity).exists(_._2.length >= 3)) (ThreeOfAKind, values.sum) else (ThreeOfAKind, 0)
+          case FourOfAKind =>
+            if (values.groupBy(identity).exists(_._2.length >= 4)) (FourOfAKind, values.sum) else (FourOfAKind, 0)
+          case FullHouse =>
+            val grouped = values.groupBy(identity)
+            if (grouped.exists(_._2.length == 3) && grouped.size == 2) (FullHouse, 25) else (FullHouse, 0)
+          case SmallStraight =>
+            if (
+              values.containsSlice(Seq(1, 2, 3, 4))
+              || values.containsSlice(Seq(2, 3, 4, 5))
+              || values.containsSlice(Seq(3, 4, 5, 6))
+            ) (SmallStraight, 30)
+            else (SmallStraight, 0)
+          case LargeStraight =>
+            if (values == Seq(1, 2, 3, 4, 5) || values == Seq(2, 3, 4, 5, 6)) (LargeStraight, 40)
+            else (LargeStraight, 0)
+          case Yahtzee => if (values.distinct.size == 1) (Yahtzee, 50) else (Yahtzee, 0)
+          case Chance  => (Chance, values.sum)
+          case Nothing => (Nothing, 0)
+        }
+      } else (parsCombination(combinations), 0)
+    else (Nothing, 0)
   }
+
+  private def checkDice(dice: Dice): Option[Dice] =
+    if (dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty) None
+    else Some(dice)
 
   private def chekCombinations(players: Player, combinations: String): Boolean =
     !players.combinationsDice.exists(x => x.combinations.name == combinations)
+
+  private def parsCombination(combinations: String): Combinations = combinations match {
+    case Ones.name          => Ones
+    case Twos.name          => Twos
+    case Threes.name        => Threes
+    case Fours.name         => Fours
+    case Fives.name         => Fives
+    case Sixes.name         => Sixes
+    case ThreeOfAKind.name  => ThreeOfAKind
+    case FourOfAKind.name   => FourOfAKind
+    case FullHouse.name     => FullHouse
+    case SmallStraight.name => SmallStraight
+    case LargeStraight.name => LargeStraight
+    case Yahtzee.name       => Yahtzee
+    case Chance.name        => Chance
+    case _                  => Nothing
+  }
 
   private def determinationResult(
     combinations: Combinations,
@@ -191,7 +216,7 @@ object YahtzeeGame extends Game {
       val result: Map[String, Int] = player.flatMap(x => amountWeight(x._1, x._2))
       result.tail.max.toString()
     } else
-      "Not all"
+      "Not everyone finished the game"
   }
 
   private def amountWeight(key: String, player: Player): Map[String, Int] = {

@@ -1,10 +1,6 @@
 package game.model
 
-import io.circe.Decoder.Result
 import io.circe._
-import monocle.function.Empty
-
-import scala.runtime.Nothing$
 
 sealed trait DiceSide { val value: Int }
 object DiceSide {

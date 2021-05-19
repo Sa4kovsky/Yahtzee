@@ -97,3 +97,10 @@ case object KeepAlive extends OutputMessage {
   override def forUser(targetUser: String) = true
   override def toString: String            = ""
 }
+
+sealed trait Message
+object Message {
+  sealed trait ErrorMessage  extends Message
+  sealed trait PeopleMessage extends PeopleMessage
+
+}
