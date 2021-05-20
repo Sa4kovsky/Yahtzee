@@ -6,7 +6,7 @@ import game.model.Dice.decodeDice
 import game.model.Player.{CombinationsDice, Player}
 import game.model._
 import io.circe.syntax.EncoderOps
-import server.model.{OutputMessage, SendToUser}
+import server.model._
 
 import scala.util.Random
 
@@ -37,7 +37,7 @@ object YahtzeeGame extends Game {
               .toString()
           )(state.roomMembers)
         )
-    } else (state, sendToRoom(room, "The room is designed for a larger number of people")(state.roomMembers))
+    } else (state, sendToRoom(room, Message.RoomErrorMessage.SizeRoom.text)(state.roomMembers))
   }
 
   private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
@@ -91,7 +91,7 @@ object YahtzeeGame extends Game {
 
       (updated, sendToRoom(room, newDice.asJson(Dice.encodeDice).toString())(updated.roomMembers))
     } else
-      (state, Seq(SendToUser(user, "You have spent all the rolls, choose a combination")))
+      (state, Seq(SendToUser(user, Message.GameErrorMessage.RollDice.text)))
   }
 
   private def increaseRound(dice: Dice, bettor: Player, room: String, user: String, combinations: String)(
@@ -123,7 +123,7 @@ object YahtzeeGame extends Game {
           )(updated.roomMembers)
         )
       } else determinationResult(calculation._1, dice, calculation._2, bettor, room, user)(state)
-    } else (state, Seq(SendToUser(user, "This combination is impossible! Choose a combination, please")))
+    } else (state, Seq(SendToUser(user, Message.GameErrorMessage.ImpossibleCombination.text)))
   }
 
   private def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
@@ -216,7 +216,7 @@ object YahtzeeGame extends Game {
       val result: Map[String, Int] = player.flatMap(x => amountWeight(x._1, x._2))
       result.tail.max.toString()
     } else
-      "Not everyone finished the game"
+      Message.GameErrorMessage.NotFinished.text
   }
 
   private def amountWeight(key: String, player: Player): Map[String, Int] = {

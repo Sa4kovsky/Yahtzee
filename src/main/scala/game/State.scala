@@ -2,7 +2,7 @@ package game
 
 import game.Room.{addToRoom, removeFromCurrentRoom, sendToRoom, sizeRoom}
 import game.YahtzeeGame._
-import _root_.game.model.Player._
+import game.model.Player._
 import server.model._
 
 case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[String]], player: Map[String, Player]) {
@@ -19,7 +19,7 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
           (this, sendToRoom(room, s"$user: $text")(this.roomMembers))
 
         case None =>
-          (this, Seq(SendToUser(user, "You are not currently in a room")))
+          (this, Seq(SendToUser(user, Message.RoomErrorMessage.NotInRoom.text)))
       }
 
     case EnterRoom(user, toRoom) =>
@@ -29,11 +29,11 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
           (finalState, Seq(WelcomeUser(user)) ++ enterMessages)
 
         case Some(currentRoom) if currentRoom == toRoom =>
-          (this, Seq(SendToUser(user, "You are already in that room!")))
+          (this, Seq(SendToUser(user, Message.RoomErrorMessage.InRoom.text)))
 
         case Some(_) =>
           if (sizeRoom(toRoom)(roomMembers) >= DefaultCountPlayerInRoom)
-            (this, Seq(SendToUser(user, "The room is occupied")))
+            (this, Seq(SendToUser(user, Message.RoomErrorMessage.RoomOccupied.text)))
           else {
             val (intermediateState, leaveMessages) = removeFromCurrentRoom(user)(this)
             val (finalState, enterMessages)        = addToRoom(user, toRoom)(intermediateState)
@@ -55,7 +55,7 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
             .mkString("Room Members:\n\t", "\n\t", "")
 
         case None =>
-          "You are not currently in a room"
+          Message.RoomErrorMessage.NotInRoom.text
       }
       (this, Seq(SendToUser(user, memberList)))
 
@@ -65,9 +65,9 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
           if (room != "default") {
             startGame(user, room, DefaultCountPlayerInRoom)(this)
           } else
-            (this, sendToRoom(room, "Choose or create another room")(this.roomMembers))
+            (this, sendToRoom(room, Message.RoomErrorMessage.ChooseRoom.text)(this.roomMembers))
 
-        case None => (this, Seq(SendToUser(user, "You are not currently in a room")))
+        case None => (this, Seq(SendToUser(user, Message.RoomErrorMessage.NotInRoom.text)))
       }
 
     case Round(user, combinations, dice) =>
@@ -79,20 +79,20 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
               case Some(bettor) =>
                 game(dice: String, bettor: Player, room: String, user: String, combinations: String)(this)
               case None =>
-                (this, Seq(SendToUser(user, "Player initialization error")))
+                (this, Seq(SendToUser(user, Message.ErrorMessage.Initialization.text)))
             }
           } else {
-            (this, Seq(SendToUser(user, "It's another player's turn now")))
+            (this, Seq(SendToUser(user, Message.GameErrorMessage.NotYourMove.text)))
           }
         case None =>
-          (this, Seq(SendToUser(user, "You are not currently in a room")))
+          (this, Seq(SendToUser(user, Message.RoomErrorMessage.NotInRoom.text)))
       }
 
     case Disconnect(user) =>
       removeFromCurrentRoom(user)(this)
 
     case InvalidInput(user, text) =>
-      (this, Seq(SendToUser(user, s"Invalid input: $text")))
+      (this, Seq(SendToUser(user, Message.ErrorMessage.Input.text + text)))
   }
 
 }

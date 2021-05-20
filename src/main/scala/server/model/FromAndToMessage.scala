@@ -1,15 +1,6 @@
 package server.model
 
-sealed trait InputMessage {
-  val user: String
-}
-
-sealed trait OutputMessage {
-
-  def forUser(targetUser: String): Boolean
-
-  def toString: String
-}
+sealed trait InputMessage { val user: String }
 
 case class Help(user: String) extends InputMessage
 
@@ -28,6 +19,13 @@ case class InvalidInput(user: String, text: String) extends InputMessage
 case class StartGameInRoom(user: String) extends InputMessage
 
 case class Round(user: String, combinations: String, dice: String) extends InputMessage
+
+sealed trait OutputMessage {
+
+  def forUser(targetUser: String): Boolean
+
+  def toString: String
+}
 
 case class WelcomeUser(user: String) extends OutputMessage {
   override def forUser(targetUser: String): Boolean = targetUser == user
@@ -98,9 +96,65 @@ case object KeepAlive extends OutputMessage {
   override def toString: String            = ""
 }
 
-sealed trait Message
-object Message {
-  sealed trait ErrorMessage  extends Message
-  sealed trait PeopleMessage extends PeopleMessage
+sealed trait Message { val text: String }
+sealed trait ErrorMessage     extends Message
+sealed trait RoomErrorMessage extends Message
+sealed trait GameErrorMessage extends Message
 
+object Message {
+
+  object ErrorMessage {
+    object Input extends ErrorMessage {
+      val text = "Invalid input: "
+    }
+
+    object Initialization extends ErrorMessage {
+      val text = "Player initialization error"
+    }
+  }
+
+  object RoomErrorMessage {
+    object NotInRoom extends RoomErrorMessage {
+      val text = "You are not currently in a room"
+    }
+
+    object InRoom extends RoomErrorMessage {
+      val text = "You are already in that room!"
+    }
+
+    object RoomOccupied extends RoomErrorMessage {
+      val text = "The room is occupied"
+    }
+
+    object ChooseRoom extends RoomErrorMessage {
+      val text = "Choose or create another room"
+    }
+
+    object SizeRoom extends RoomErrorMessage {
+      val text = "The room is designed for a larger number of people"
+    }
+  }
+
+  object GameErrorMessage {
+
+    object NotYourMove extends GameErrorMessage {
+      val text = "Now it's the other player's turn"
+    }
+
+    object NotFinished extends GameErrorMessage {
+      val text = "Not everyone finished the game"
+    }
+
+    object ImpossibleCombination extends GameErrorMessage {
+      val text = "This combination is impossible! Choose a combination, please"
+    }
+
+    object RollDice extends GameErrorMessage {
+      val text = "You have spent all the rolls, choose a combination"
+    }
+
+    object StartGame extends GameErrorMessage {
+      val text = "The game began"
+    }
+  }
 }
