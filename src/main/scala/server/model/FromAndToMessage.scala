@@ -156,7 +156,7 @@ object Message {
     }
 
     object StartGame extends GameErrorMessage {
-      val text = "The game began"
+      val text = "The game has begun"
     }
   }
 }

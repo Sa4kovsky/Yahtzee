@@ -1,6 +1,5 @@
 package game.model
 
-import io.circe
 import io.circe._
 
 sealed trait DiceSide { val value: Int }

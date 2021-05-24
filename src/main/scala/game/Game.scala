@@ -1,7 +1,7 @@
 package game
 
-import game.Room.sendToRoom
-import game.model.Combinations._
+import game.model.Combinations.ComplexCombinations._
+import game.model.Combinations.SimpleCombinations._
 import game.model.Dice.decodeDice
 import game.model.Player.{CombinationsDice, Player}
 import game.model._
@@ -11,53 +11,69 @@ import server.model._
 import scala.util.Random
 
 trait Game {
-  def startGame(user: User, room: Room, countPlayers: Int)(state: State): (State, Seq[OutputMessage])
+  def startGame(user: User, room: Room, countPlayers: Int)(implicit state: GameState): (GameState, Seq[OutputMessage])
 
-  def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(
-    state: State
-  ): (State, Seq[OutputMessage])
+  def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(implicit
+    state: GameState
+  ): (GameState, Seq[OutputMessage])
 }
 
 object Game extends Game {
 
-  override def startGame(user: User, room: Room, countPlayers: Int)(state: State): (State, Seq[OutputMessage]) = {
-    val count = countUser(room)(state).size
+  override def startGame(user: User, room: Room, countPlayers: Int)(implicit
+    state: GameState
+  ): (GameState, Seq[OutputMessage]) = {
+    val count = countUser(room).size
     if (count == countPlayers) {
       val p = state.player.getOrElse(user, Player.Default)
       if (p.round > 1 || p.step > 1)
-        (state, sendToRoom(room, "The game began")(state.roomMembers))
+        (
+          state,
+          Seq(
+            SendToUsers(state.roomMembers.getOrElse(room, Set.empty), Message.GameErrorMessage.StartGame.text)
+          )
+        )
       else
         (
           state,
-          sendToRoom(
-            room,
-            Dice
-              .of(diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None))
-              .asJson(Dice.encodeDice)
-              .toString()
-          )(state.roomMembers)
+          Seq(
+            SendToUsers(
+              state.roomMembers.getOrElse(room, Set.empty),
+              Dice
+                .of(diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None))
+                .asJson(Dice.encodeDice)
+                .toString
+            )
+          )
         )
-    } else (state, sendToRoom(room, Message.RoomErrorMessage.SizeRoom.text)(state.roomMembers))
+
+    } else
+      (
+        state,
+        Seq(
+          SendToUsers(state.roomMembers.getOrElse(room, Set.empty), Message.RoomErrorMessage.SizeRoom.text)
+        )
+      )
   }
 
-  override def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(
-    state: State
-  ): (State, Seq[OutputMessage]) =
+  override def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(implicit
+    state: GameState
+  ): (GameState, Seq[OutputMessage]) =
     decodeDice(dice) match {
       case Some(value) =>
         if (
           value.a.isEmpty || value.b.isEmpty || value.c.isEmpty || value.d.isEmpty || value.e.isEmpty || combinations == Nothing.name
         )
-          increaseStep(value, bettor, room, user)(state)
+          increaseStep(value, bettor, room, user)
         else {
-          increaseRound(value, bettor, room, user, combinations)(state)
+          increaseRound(value, bettor, room, user, combinations)
         }
-      case None => increaseRound(Dice.Default, bettor, room, user, combinations)(state)
+      case None => increaseRound(Dice.Default, bettor, room, user, combinations)
     }
 
-  private def increaseStep(dice: Dice, bettor: Player, room: Room, user: User)(
-    state: State
-  ): (State, Seq[OutputMessage]) = {
+  private def increaseStep(dice: Dice, bettor: Player, room: Room, user: User)(implicit
+    state: GameState
+  ): (GameState, Seq[OutputMessage]) = {
     val DefaultStep = 3
 
     val newDice = Dice.of(
@@ -70,43 +86,16 @@ object Game extends Game {
     if (bettor.step != DefaultStep) {
       val newBettor = Player.of(bettor.combinationsDice, bettor.round, bettor.step + 1)
 
-      val updated = State(state.userRooms, state.roomMembers, state.player + (user -> newBettor))
+      val updated = GameState(state.userRooms, state.roomMembers, state.player + (user -> newBettor))
 
-      (updated, sendToRoom(room, newDice.asJson(Dice.encodeDice).toString())(updated.roomMembers))
+      (
+        updated,
+        Seq(
+          SendToUsers(updated.roomMembers.getOrElse(room, Set.empty), newDice.asJson(Dice.encodeDice).toString)
+        )
+      )
     } else
       (state, Seq(SendToUser(user, Message.GameErrorMessage.RollDice.text)))
-  }
-
-  private def increaseRound(dice: Dice, bettor: Player, room: Room, user: User, combinations: String)(
-    state: State
-  ): (State, Seq[OutputMessage]) = {
-
-    val calculation = calcWeight(bettor, combinations, dice)
-
-    if (calculation._1 != Nothing & calculation._2 != 0) {
-      if (bettor.round < 13) {
-        val combinationsDice = CombinationsDice.of(calculation._1, dice, calculation._2)
-        val newBettor        = Player.of(bettor.combinationsDice :+ combinationsDice, bettor.round + 1, 0)
-        val newRoomMembers   = state.roomMembers.getOrElse(room, Set()) - user
-
-        val updated = State(
-          state.userRooms,
-          state.roomMembers + (room -> (newRoomMembers + user)),
-          state.player + (user      -> newBettor)
-        )
-
-        (
-          updated,
-          sendToRoom(
-            room,
-            Dice
-              .of(diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None))
-              .asJson(Dice.encodeDice)
-              .toString()
-          )(updated.roomMembers)
-        )
-      } else determinationResult(calculation._1, dice, calculation._2, bettor, room, user)(state)
-    } else (state, Seq(SendToUser(user, Message.GameErrorMessage.ImpossibleCombination.text)))
   }
 
   private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
@@ -123,6 +112,40 @@ object Game extends Game {
           case _ => None
         }
     }
+
+  private def increaseRound(dice: Dice, bettor: Player, room: Room, user: User, combinations: String)(implicit
+    state: GameState
+  ): (GameState, Seq[OutputMessage]) = {
+
+    val calculation = calcWeight(bettor, combinations, dice)
+
+    if (calculation._1 != Nothing & calculation._2 != 0) {
+      if (bettor.round < 13) {
+        val combinationsDice = CombinationsDice.of(calculation._1, dice, calculation._2)
+        val newBettor        = Player.of(bettor.combinationsDice :+ combinationsDice, bettor.round + 1, 0)
+        val newRoomMembers   = state.roomMembers.getOrElse(room, Set()) - user
+
+        val updated = GameState(
+          state.userRooms,
+          state.roomMembers + (room -> (newRoomMembers + user)),
+          state.player + (user      -> newBettor)
+        )
+
+        (
+          updated,
+          Seq(
+            SendToUsers(
+              updated.roomMembers.getOrElse(room, Set.empty),
+              Dice
+                .of(diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None), diceRoll(None))
+                .asJson(Dice.encodeDice)
+                .toString
+            )
+          )
+        )
+      } else determinationResult(calculation._1, dice, calculation._2, bettor, room, user)(state)
+    } else (state, Seq(SendToUser(user, Message.GameErrorMessage.ImpossibleCombination.text)))
+  }
 
   private def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
     if (chekCombinations(player, combinations))
@@ -192,22 +215,30 @@ object Game extends Game {
     bettor: Player,
     room: Room,
     user: User
-  )(state: State): (State, Seq[OutputMessage]) = {
+  )(implicit state: GameState): (GameState, Seq[OutputMessage]) = {
     val combinationsDice = CombinationsDice.of(combinations, dice, weight)
     val newBettor        = Player.of(bettor.combinationsDice :+ combinationsDice, bettor.round + 1, 0)
     val newRoomMembers   = state.roomMembers.getOrElse(room, Set()) - user
 
-    val updated = State(
+    val updated = GameState(
       state.userRooms,
       state.roomMembers + (room -> (newRoomMembers + user)),
       state.player + (user      -> newBettor)
     )
 
     val newPlayer = state.player - user
-    (updated, sendToRoom(room, resultGame(newPlayer + (user -> newBettor), room)(state))(updated.roomMembers))
+    (
+      updated,
+      Seq(
+        SendToUsers(
+          updated.roomMembers.getOrElse(room, Set.empty),
+          resultGame(newPlayer + (user -> newBettor), room)
+        )
+      )
+    )
   }
 
-  private def resultGame(player: Map[User, Player], room: Room)(state: State): String = {
+  private def resultGame(player: Map[User, Player], room: Room)(implicit state: GameState): String = {
     val listPlayer = countUser(room)(state)
     val size       = listPlayer.count(player.getOrElse(_, Player.Default).round == 14)
     if (listPlayer.size == size) {
@@ -217,7 +248,8 @@ object Game extends Game {
       Message.GameErrorMessage.NotFinished.text
   }
 
-  private def countUser(room: Room)(state: State): List[User] = state.roomMembers.getOrElse(room, List()).toList
+  private def countUser(room: Room)(implicit state: GameState): List[User] =
+    state.roomMembers.getOrElse(room, List()).toList
 
   private def amountWeight(key: User, player: Player): Map[User, Int] = {
     val c = player.combinationsDice.foldLeft(0)((x, player) => x + player.weight)

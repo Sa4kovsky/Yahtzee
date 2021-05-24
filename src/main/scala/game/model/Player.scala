@@ -1,6 +1,6 @@
 package game.model
 
-import game.model.Combinations.Nothing
+import game.model.Combinations.SimpleCombinations.Nothing
 
 object Player {
 

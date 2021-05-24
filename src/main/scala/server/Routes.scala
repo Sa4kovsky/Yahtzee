@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ContextShift, Sync}
 import fs2.concurrent.{Queue, Topic}
 import fs2.{Pipe, Stream}
-import game.State
+import game.GameState
 import game.model.User
 import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
@@ -16,7 +16,7 @@ import server.model.{Disconnect, EnterRoom, InputMessage, OutputMessage}
 object Routes {
 
   def routes[F[_]: Sync: ContextShift](
-    chatState: Ref[F, State],
+    chatState: Ref[F, GameState],
     queue: Queue[F, InputMessage],
     topic: Topic[F, OutputMessage]
   ): HttpRoutes[F] = {
