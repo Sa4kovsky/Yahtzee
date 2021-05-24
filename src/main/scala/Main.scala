@@ -1,5 +1,8 @@
+import cats.{Monad, data}
+import cats.data.{Writer, WriterT}
 import cats.effect.concurrent.Ref
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.mtl.Tell
 import fs2.Stream
 import fs2.concurrent.{Queue, Topic}
 import game.State
@@ -13,7 +16,7 @@ object Main extends IOApp {
     for (
       queue <- Queue.unbounded[IO, InputMessage];
       topic <- Topic[IO, OutputMessage](SendToUsers(Set.empty, ""));
-      ref <- Ref.of[IO, State](State());
+      ref   <- Ref.of[IO, State](State());
 
       exitCode <- {
         val httpStream = Server.stream[IO](ref, queue, topic)
@@ -25,7 +28,9 @@ object Main extends IOApp {
 
         val processingStream =
           queue.dequeue
-            .evalMap(msg => ref.modify(_.process(msg)))
+            .evalMap { msg =>
+              ref.modify(_.process[WriterT[data.StateT[IO, State, *], Seq[OutputMessage], *]](msg))
+            }
             .flatMap(Stream.emits)
             .through(topic.publish)
 

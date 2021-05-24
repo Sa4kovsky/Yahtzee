@@ -1,47 +1,63 @@
 package game
 
-import game.model.Player.{Player}
+import cats.Monad
+import cats.mtl.{Stateful, Tell}
+import cats.syntax.all._
+import game.model.Player.Player
 import server.model._
 
+trait Room[F[_]] {
+
+  type Room = String
+  type User = String
+
+  def removeFromCurrentRoom(user: User): F[Unit]
+  def sendToRoom(room: Room, text: String): F[Unit]
+  def addToRoom(room: Room, user: User): F[Unit]
+  def roomSize(room: Room): F[Int]
+}
+
 object Room {
+
   val DefaultPlayer: Player = Player.of()
 
-  def removeFromCurrentRoom(user: String)(state: State): (State, Seq[OutputMessage]) =
-    state.userRooms.get(user) match {
-      case Some(room) =>
-        val nextMembers = state.roomMembers.getOrElse(room, Set()) - user
-        val nextState =
-          if (nextMembers.isEmpty)
-            State(state.userRooms - user, state.roomMembers - room, state.player - user)
-          else
-            State(state.userRooms - user, state.roomMembers + (room -> nextMembers), state.player - user)
+  def make[F[_]: Monad: Stateful[*[_], State]: Tell[*[_], Seq[OutputMessage]]]: Room[F] = new Room[F] {
 
-        (nextState, sendToRoom(room, s"$user has left $room")(nextState.roomMembers))
+    override def removeFromCurrentRoom(user: Room): F[Unit] = for {
+      state <- Stateful.get[F, State]
+      _ <- state.userRooms.get(user) match {
+        case Some(room) =>
+          val nextMembers = state.roomMembers.getOrElse(room, Set()) - user
+          val nextState =
+            if (nextMembers.isEmpty)
+              State(state.userRooms - user, state.roomMembers - room, state.player - user)
+            else
+              State(state.userRooms - user, state.roomMembers + (room -> nextMembers), state.player - user)
+          Stateful[F, State].set(nextState) *> sendToRoom(room, s"$user has left $room")
+        case None => Monad[F].unit
+      }
+    } yield ()
 
-      case None => (state, Nil)
-    }
+    override def sendToRoom(room: Room, text: String): F[Unit] = for {
+      members <- Stateful.get[F, State].map(_.roomMembers.get(room))
+      _ <- members match {
+        case Some(members) => Tell[F, Seq[OutputMessage]].tell(Seq(SendToUsers(members, text)))
+        case None          => Monad[F].unit
+      }
+    } yield ()
 
-  def sendToRoom(room: String, text: String)(roomMembers: Map[String, Set[String]]): Seq[OutputMessage] = {
-    roomMembers
-      .get(room)
-      .map(SendToUsers(_, text))
-      .toSeq
+    override def addToRoom(room: Room, user: User): F[Unit] = for {
+      members <- Stateful.get[F, State].map(_.roomMembers.getOrElse(room, Set()) + user)
+      _ <- Stateful.modify[F, State] { state =>
+        State(
+          state.userRooms + (user   -> room),
+          state.roomMembers + (room -> members),
+          state.player + (user      -> DefaultPlayer)
+        )
+      } *> sendToRoom(room, s"$user has joined $room")
+    } yield ()
+
+    override def roomSize(room: Room): F[Int] =
+      Stateful.get[F, State].map(_.roomMembers.get(room).map(_.size).getOrElse(0))
   }
-
-  def addToRoom(user: String, room: String)(state: State): (State, Seq[OutputMessage]) = {
-    val nextMembers = state.roomMembers.getOrElse(room, Set()) + user
-    val nextState = State(
-      state.userRooms + (user   -> room),
-      state.roomMembers + (room -> nextMembers),
-      state.player + (user      -> DefaultPlayer)
-    )
-
-    (nextState, sendToRoom(room, s"$user has joined $room")(nextState.roomMembers))
-  }
-
-  def sizeRoom(toRoom: String)(roomMembers: Map[String, Set[String]]): Int =
-    roomMembers
-      .getOrElse(toRoom, Set())
-      .toList
-      .size
 }

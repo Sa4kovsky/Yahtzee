@@ -46,13 +46,13 @@ object InputMessage {
   val DefaultRoomName = "default"
   val HelpText: String =
     """Commands:
-        |  /help                       - Show this text
-        |  /room                       - Change to default/entry room
-        |  /room <room name>           - Change to specified room
-        |  /rooms                      - List all rooms
-        |  /members                    - List members in current room
-        |  /start                      - Start game
-        |  /round <Combination> <Dice> - Round game
+      |  /help                       - Show this text
+      |  /room                       - Change to default/entry room
+      |  /room <room name>           - Change to specified room
+      |  /rooms                      - List all rooms
+      |  /members                    - List members in current room
+      |  /start                      - Start game
+      |  /round <Combination> <Dice> - Round game
     """.stripMargin
 
   // Parses a string into a command
@@ -154,7 +154,7 @@ object Message {
     }
 
     object StartGame extends GameErrorMessage {
-      val text = "The game began"
+      val text = "The game has begun"
     }
   }
 }
