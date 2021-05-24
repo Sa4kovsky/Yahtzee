@@ -1,12 +1,11 @@
 package game
 
-import game.model.Player.{Player}
+import game.model.Player.Player
+import game.model.{Room, User}
 import server.model._
 
 object Room {
-  val DefaultPlayer: Player = Player.of()
-
-  def removeFromCurrentRoom(user: String)(state: State): (State, Seq[OutputMessage]) =
+  def removeFromCurrentRoom(user: User)(state: State): (State, Seq[OutputMessage]) =
     state.userRooms.get(user) match {
       case Some(room) =>
         val nextMembers = state.roomMembers.getOrElse(room, Set()) - user
@@ -21,25 +20,25 @@ object Room {
       case None => (state, Nil)
     }
 
-  def sendToRoom(room: String, text: String)(roomMembers: Map[String, Set[String]]): Seq[OutputMessage] = {
+  def sendToRoom(room: Room, text: String)(roomMembers: Map[Room, Set[User]]): Seq[SendToUsers] = {
     roomMembers
       .get(room)
       .map(SendToUsers(_, text))
       .toSeq
   }
 
-  def addToRoom(user: String, room: String)(state: State): (State, Seq[OutputMessage]) = {
+  def addToRoom(user: User, room: Room)(state: State): (State, Seq[OutputMessage]) = {
     val nextMembers = state.roomMembers.getOrElse(room, Set()) + user
     val nextState = State(
       state.userRooms + (user   -> room),
       state.roomMembers + (room -> nextMembers),
-      state.player + (user      -> DefaultPlayer)
+      state.player + (user      -> Player.Default)
     )
 
     (nextState, sendToRoom(room, s"$user has joined $room")(nextState.roomMembers))
   }
 
-  def sizeRoom(toRoom: String)(roomMembers: Map[String, Set[String]]): Int =
+  def sizeRoom(toRoom: Room)(roomMembers: Map[Room, Set[User]]): Int =
     roomMembers
       .getOrElse(toRoom, Set())
       .toList

@@ -21,21 +21,21 @@ object Player {
   )
 
   object CombinationsDice {
-
+    val Default = new CombinationsDice(Nothing, Dice.Default, 0) {}
     def of(
-      combinations: Combinations = Nothing,
-      dice: Dice = Dice.of(),
-      weight: Int = 0
+      combinations: Combinations,
+      dice: Dice,
+      weight: Int
     ): CombinationsDice =
       new CombinationsDice(combinations, dice, weight) {}
   }
 
   object Player {
-
+    val Default: Player = new Player(List(), 1, 1) {}
     def of(
-      combinationsDice: List[CombinationsDice] = List(),
-      round: Rounds = 1,
-      step: Step = 1
+      combinationsDice: List[CombinationsDice],
+      round: Rounds,
+      step: Step
     ): Player =
       new Player(combinationsDice, round, step) {}
   }

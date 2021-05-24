@@ -1,49 +1,51 @@
 package server.model
 
-sealed trait InputMessage { val user: String }
+import game.model.{Room, User}
 
-case class Help(user: String) extends InputMessage
+sealed trait InputMessage { val user: User }
 
-case class Chat(user: String, text: String) extends InputMessage
+case class Help(user: User) extends InputMessage
 
-case class EnterRoom(user: String, room: String) extends InputMessage
+case class Chat(user: User, text: String) extends InputMessage
 
-case class ListRooms(user: String) extends InputMessage
+case class EnterRoom(user: User, room: Room) extends InputMessage
 
-case class ListMembers(user: String) extends InputMessage
+case class ListRooms(user: User) extends InputMessage
 
-case class Disconnect(user: String) extends InputMessage
+case class ListMembers(user: User) extends InputMessage
 
-case class InvalidInput(user: String, text: String) extends InputMessage
+case class Disconnect(user: User) extends InputMessage
 
-case class StartGameInRoom(user: String) extends InputMessage
+case class InvalidInput(user: User, text: String) extends InputMessage
 
-case class Round(user: String, combinations: String, dice: String) extends InputMessage
+case class StartGameInRoom(user: User) extends InputMessage
+
+case class Round(user: User, combinations: String, dice: String) extends InputMessage
 
 sealed trait OutputMessage {
 
-  def forUser(targetUser: String): Boolean
+  def forUser(targetUser: User): Boolean
 
   def toString: String
 }
 
-case class WelcomeUser(user: String) extends OutputMessage {
-  override def forUser(targetUser: String): Boolean = targetUser == user
-  override def toString: String                     = s"Welcome to Yahtzee"
+case class WelcomeUser(user: User) extends OutputMessage {
+  override def forUser(targetUser: User): Boolean = targetUser == user
+  override def toString: String                   = s"Welcome to Yahtzee"
 }
 
-case class SendToUser(user: String, text: String) extends OutputMessage {
-  override def forUser(targetUser: String): Boolean = targetUser == user
-  override def toString: String                     = text
+case class SendToUser(user: User, text: String) extends OutputMessage {
+  override def forUser(targetUser: User): Boolean = targetUser == user
+  override def toString: String                   = text
 }
 
-case class SendToUsers(users: Set[String], text: String) extends OutputMessage {
-  override def forUser(targetUser: String): Boolean = users.contains(targetUser)
-  override def toString: String                     = text
+case class SendToUsers(users: Set[User], text: String) extends OutputMessage {
+  override def forUser(targetUser: User): Boolean = users.contains(targetUser)
+  override def toString: String                   = text
 }
 
 object InputMessage {
-  val DefaultRoomName = "default"
+  val DefaultRoomName = Room("default")
   val HelpText: String =
     """Commands:
         |  /help                       - Show this text
@@ -56,11 +58,11 @@ object InputMessage {
     """.stripMargin
 
   // Parses a string into a command
-  def parse(user: String, text: String): InputMessage =
+  def parse(user: User, text: String): InputMessage =
     splitFirstTwoWords(text) match {
       case ("/help", _, _)     => Help(user)
       case ("/room", "", "")   => EnterRoom(user, DefaultRoomName)
-      case ("/room", room, "") => EnterRoom(user, room.toLowerCase)
+      case ("/room", room, "") => EnterRoom(user, Room(room.toLowerCase))
       case ("/room", _, _) =>
         InvalidInput(user, "/room takes a single, optional argument")
       case ("/rooms", _, _)              => ListRooms(user)
@@ -92,8 +94,8 @@ object InputMessage {
 }
 
 case object KeepAlive extends OutputMessage {
-  override def forUser(targetUser: String) = true
-  override def toString: String            = ""
+  override def forUser(targetUser: User) = true
+  override def toString: String          = ""
 }
 
 sealed trait Message { val text: String }

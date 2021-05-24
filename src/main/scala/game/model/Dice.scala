@@ -1,5 +1,6 @@
 package game.model
 
+import io.circe
 import io.circe._
 
 sealed trait DiceSide { val value: Int }
@@ -11,22 +12,19 @@ object DiceSide {
   case object Five extends DiceSide { val value = 5 }
   case object Six  extends DiceSide { val value = 6 }
 
-  implicit val decodeDiceSide: Decoder[Option[DiceSide]] = (c: HCursor) =>
-    c.value.asString match {
-      case Some(s) =>
-        s.toIntOption match {
-          case Some(1) => Right(Some(One))
-          case Some(2) => Right(Some(Two))
-          case Some(3) => Right(Some(Tree))
-          case Some(4) => Right(Some(Four))
-          case Some(5) => Right(Some(Five))
-          case Some(6) => Right(Some(Six))
-          case _       => Right(None)
-        }
-      case None => Right(None) ///???
+  implicit val decodeDiceSide: Decoder[Option[DiceSide]] = Decoder[String].emap { s =>
+    s.toIntOption match {
+      case Some(1) => Right(Some(One))
+      case Some(2) => Right(Some(Two))
+      case Some(3) => Right(Some(Tree))
+      case Some(4) => Right(Some(Four))
+      case Some(5) => Right(Some(Five))
+      case Some(6) => Right(Some(Six))
+      case _       => Right(None)
     }
+  }
 
-  implicit val encoderDiceSide: Encoder[DiceSide] = (a: DiceSide) => Json.fromString(a.value.toString)
+  implicit val encoderDiceSide: Encoder[DiceSide] = Encoder[String].contramap(_.value.toString)
 }
 
 sealed abstract case class Dice private (
@@ -38,13 +36,14 @@ sealed abstract case class Dice private (
 )
 
 object Dice {
+  val Default: Dice = new Dice(None, None, None, None, None) {}
 
   def of(
-    a: Option[DiceSide] = None,
-    b: Option[DiceSide] = None,
-    c: Option[DiceSide] = None,
-    d: Option[DiceSide] = None,
-    e: Option[DiceSide] = None
+    a: Option[DiceSide],
+    b: Option[DiceSide],
+    c: Option[DiceSide],
+    d: Option[DiceSide],
+    e: Option[DiceSide]
   ): Dice =
     new Dice(a, b, c, d, e) {}
 

@@ -1,11 +1,12 @@
 package game
 
 import game.Room.{addToRoom, removeFromCurrentRoom, sendToRoom, sizeRoom}
-import game.YahtzeeGame._
-import game.model.Player._
+import game.Game._
+import _root_.game.model.Player.Player
+import _root_.game.model.{Room, User}
 import server.model._
 
-case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[String]], player: Map[String, Player]) {
+case class State(userRooms: Map[User, Room], roomMembers: Map[Room, Set[User]], player: Map[User, Player]) {
   val DefaultCountPlayerInRoom = 2
   val DefaultStep              = 3
 
@@ -42,7 +43,7 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
       }
 
     case ListRooms(user) =>
-      val roomList = roomMembers.keys.toList.sorted.mkString("Rooms:\n\t", "\n\t", "")
+      val roomList = roomMembers.keys.toList.sortBy(_.name).mkString("Rooms:\n\t", "\n\t", "")
       (this, Seq(SendToUser(user, roomList)))
 
     case ListMembers(user) =>
@@ -51,7 +52,7 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
           roomMembers
             .getOrElse(room, Set())
             .toList
-            .sorted
+            .sortBy(_.name)
             .mkString("Room Members:\n\t", "\n\t", "")
 
         case None =>
@@ -62,7 +63,7 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
     case StartGameInRoom(user) =>
       userRooms.get(user) match {
         case Some(room) =>
-          if (room != "default") {
+          if (room != Room("default")) {
             startGame(user, room, DefaultCountPlayerInRoom)(this)
           } else
             (this, sendToRoom(room, Message.RoomErrorMessage.ChooseRoom.text)(this.roomMembers))
@@ -73,11 +74,11 @@ case class State(userRooms: Map[String, String], roomMembers: Map[String, Set[St
     case Round(user, combinations, dice) =>
       userRooms.get(user) match {
         case Some(room) =>
-          val users: List[String] = roomMembers.getOrElse(room, List()).toList
+          val users: List[User] = roomMembers.getOrElse(room, List()).toList
           if (user == users.head) {
             player.get(user) match {
               case Some(bettor) =>
-                game(dice: String, bettor: Player, room: String, user: String, combinations: String)(this)
+                game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(this)
               case None =>
                 (this, Seq(SendToUser(user, Message.ErrorMessage.Initialization.text)))
             }
