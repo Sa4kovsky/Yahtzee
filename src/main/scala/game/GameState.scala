@@ -2,18 +2,16 @@ package game
 
 import _root_.game.model.Player.Player
 import _root_.game.model.{Room, User}
-import cats.Monad
-import cats.data.State
+import _root_.game.model.Dice.decodeDice
 import game.Room.{addToRoom, removeFromCurrentRoom, sizeRoom}
 import game.Game._
+
+import cats.data.State
 import server.model._
 
-case class GameState(userRooms: Map[User, Room], roomMembers: Map[Room, Set[User]], player: Map[User, Player]) {}
+final case class GameState(userRooms: Map[User, Room], roomMembers: Map[Room, Set[User]], player: Map[User, Player]) {}
 
 object GameState {
-  val DefaultCountPlayerInRoom = 2
-  val DefaultStep              = 3
-
   def apply(): GameState = GameState(Map.empty, Map.empty, Map.empty)
 
   def process(msg: InputMessage): State[GameState, Seq[OutputMessage]] =
@@ -101,7 +99,7 @@ object GameState {
               if (user == users.head) {
                 state.player.get(user) match {
                   case Some(bettor) =>
-                    game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(state)
+                    game(decodeDice(dice), bettor, room, user, Parsing.parsCombination(combinations))(state)
                   case None =>
                     (state, Seq(SendToUser(user, Message.ErrorMessage.Initialization.text)))
                 }
@@ -123,4 +121,8 @@ object GameState {
           (state, Seq(SendToUser(user, Message.ErrorMessage.Input.text + text)))
         }
     }
+
+  val DefaultCountPlayerInRoom = 2
+  val DefaultStep              = 3
+
 }

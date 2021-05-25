@@ -4,8 +4,13 @@ import game.model.Player.Player
 import game.model.{Room, User}
 import server.model._
 
-object Room {
-  def removeFromCurrentRoom(user: User)(implicit state: GameState): (GameState, Seq[OutputMessage]) =
+trait Rooms {
+  def removeFromCurrentRoom(user: User)(implicit state: GameState): (GameState, Seq[OutputMessage])
+  def addToRoom(user: User, room: Room)(implicit state: GameState): (GameState, Seq[OutputMessage])
+}
+
+object Room extends Rooms {
+  override def removeFromCurrentRoom(user: User)(implicit state: GameState): (GameState, Seq[OutputMessage]) =
     state.userRooms.get(user) match {
       case Some(room) =>
         val nextMembers = state.roomMembers.getOrElse(room, Set()) - user
@@ -24,7 +29,7 @@ object Room {
       case None => (state, Nil)
     }
 
-  def addToRoom(user: User, room: Room)(implicit state: GameState): (GameState, Seq[OutputMessage]) = {
+  override def addToRoom(user: User, room: Room)(implicit state: GameState): (GameState, Seq[OutputMessage]) = {
     val nextMembers = state.roomMembers.getOrElse(room, Set()) + user
     val nextState = GameState(
       state.userRooms + (user   -> room),

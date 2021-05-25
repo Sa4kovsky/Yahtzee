@@ -16,7 +16,7 @@ import server.model.{Disconnect, EnterRoom, InputMessage, OutputMessage}
 object Routes {
 
   def routes[F[_]: Sync: ContextShift](
-    chatState: Ref[F, GameState],
+    gameState: Ref[F, GameState],
     queue: Queue[F, InputMessage],
     topic: Topic[F, OutputMessage]
   ): HttpRoutes[F] = {
@@ -31,9 +31,7 @@ object Routes {
           .filter(_.forUser(User(userName)))
           .map(msg => Text(msg.toString))
 
-      def processInput(
-        wsfStream: Stream[F, WebSocketFrame]
-      ): Stream[F, Unit] = {
+      def processInput(wsfStream: Stream[F, WebSocketFrame]): Stream[F, Unit] = {
         val entryStream: Stream[F, InputMessage] =
           Stream.emits(Seq(EnterRoom(User(userName), InputMessage.DefaultRoomName)))
 

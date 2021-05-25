@@ -1,19 +1,17 @@
 package game
 
+import game.Roll.diceRoll
 import game.model.Combinations.ComplexCombinations._
 import game.model.Combinations.SimpleCombinations._
-import game.model.Dice.decodeDice
 import game.model.Player.{CombinationsDice, Player}
 import game.model._
 import io.circe.syntax.EncoderOps
 import server.model._
 
-import scala.util.Random
-
 trait Game {
   def startGame(user: User, room: Room, countPlayers: Int)(implicit state: GameState): (GameState, Seq[OutputMessage])
 
-  def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(implicit
+  def game(dice: Option[Dice], bettor: Player, room: Room, user: User, combinations: Combinations)(implicit
     state: GameState
   ): (GameState, Seq[OutputMessage])
 }
@@ -56,31 +54,13 @@ object Game extends Game {
       )
   }
 
-  private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
-    x match {
-      case Some(value) => Some(value)
-      case None =>
-        Random.nextInt(6) + 1 match {
-          case 1 => Some(DiceSide.One)
-          case 2 => Some(DiceSide.Two)
-          case 3 => Some(DiceSide.Tree)
-          case 4 => Some(DiceSide.Four)
-          case 5 => Some(DiceSide.Five)
-          case 6 => Some(DiceSide.Six)
-          case _ => None
-        }
-    }
-
-  private def countUser(room: Room)(implicit state: GameState): List[User] =
-    state.roomMembers.getOrElse(room, List()).toList
-
-  override def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(implicit
+  override def game(dice: Option[Dice], bettor: Player, room: Room, user: User, combinations: Combinations)(implicit
     state: GameState
   ): (GameState, Seq[OutputMessage]) =
-    decodeDice(dice) match {
+    dice match {
       case Some(value) =>
         if (
-          value.a.isEmpty || value.b.isEmpty || value.c.isEmpty || value.d.isEmpty || value.e.isEmpty || combinations == Nothing.name
+          value.a.isEmpty || value.b.isEmpty || value.c.isEmpty || value.d.isEmpty || value.e.isEmpty || combinations == Nothing
         )
           increaseStep(value, bettor, room, user)
         else {
@@ -116,7 +96,7 @@ object Game extends Game {
       (state, Seq(SendToUser(user, Message.GameErrorMessage.RollDice.text)))
   }
 
-  private def increaseRound(dice: Dice, bettor: Player, room: Room, user: User, combinations: String)(implicit
+  private def increaseRound(dice: Dice, bettor: Player, room: Room, user: User, combinations: Combinations)(implicit
     state: GameState
   ): (GameState, Seq[OutputMessage]) = {
 
@@ -150,12 +130,12 @@ object Game extends Game {
     } else (state, Seq(SendToUser(user, Message.GameErrorMessage.ImpossibleCombination.text)))
   }
 
-  private[game] def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
+  private[game] def calcWeight(player: Player, combinations: Combinations, dice: Dice): (Combinations, Int) = {
     if (chekCombinations(player, combinations))
       if (checkDice(dice).isDefined) {
         val values =
           List(dice.a.get.value, dice.b.get.value, dice.c.get.value, dice.d.get.value, dice.e.get.value).sorted
-        parsCombination(combinations) match {
+        combinations match {
           case Ones   => (Ones, values.count(_ == 1))
           case Twos   => (Twos, values.count(_ == 2) * 2)
           case Threes => (Threes, values.count(_ == 3) * 3)
@@ -183,7 +163,7 @@ object Game extends Game {
           case Chance  => (Chance, values.sum)
           case Nothing => (Nothing, 0)
         }
-      } else (parsCombination(combinations), 0)
+      } else (combinations, -1)
     else (Nothing, 0)
   }
 
@@ -191,25 +171,8 @@ object Game extends Game {
     if (dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty || dice.a.isEmpty) None
     else Some(dice)
 
-  private def chekCombinations(players: Player, combinations: String): Boolean =
-    !players.combinationsDice.exists(x => x.combinations.name == combinations)
-
-  private def parsCombination(combinations: String): Combinations = combinations match {
-    case Ones.name          => Ones
-    case Twos.name          => Twos
-    case Threes.name        => Threes
-    case Fours.name         => Fours
-    case Fives.name         => Fives
-    case Sixes.name         => Sixes
-    case ThreeOfAKind.name  => ThreeOfAKind
-    case FourOfAKind.name   => FourOfAKind
-    case FullHouse.name     => FullHouse
-    case SmallStraight.name => SmallStraight
-    case LargeStraight.name => LargeStraight
-    case Yahtzee.name       => Yahtzee
-    case Chance.name        => Chance
-    case _                  => Nothing
-  }
+  private def chekCombinations(players: Player, combinations: Combinations): Boolean =
+    !players.combinationsDice.exists(x => x.combinations == combinations)
 
   private def determinationResult(
     combinations: Combinations,
@@ -250,6 +213,9 @@ object Game extends Game {
     } else
       Message.GameErrorMessage.NotFinished.text
   }
+
+  private def countUser(room: Room)(implicit state: GameState): List[User] =
+    state.roomMembers.getOrElse(room, List()).toList
 
   private def amountWeight(key: User, player: Player): Map[User, Int] = {
     val c = player.combinationsDice.foldLeft(0)((x, player) => x + player.weight)

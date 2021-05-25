@@ -37,12 +37,12 @@ class GameTest extends AnyFunSuite {
   }
 
   test("test - checking combinations and determining the weight of game dice") {
-    val pars = Game.calcWeight(player, "Twos", Dice.of(Some(Two), Some(One), Some(Two), Some(Two), Some(Tree)))
+    val pars = Game.calcWeight(player, Twos, Dice.of(Some(Two), Some(One), Some(Two), Some(Two), Some(Tree)))
     assert((Twos, 6) == pars)
   }
 
   test("test - error checking combinations and determining the weight of game dice") {
-    val pars = Game.calcWeight(player, "Ones", Dice.of(Some(Two), Some(One), Some(Two), Some(Two), Some(Tree)))
+    val pars = Game.calcWeight(player, Ones, Dice.of(Some(Two), Some(One), Some(Two), Some(Two), Some(Tree)))
     assert((Nothing, 0) == pars)
   }
 }

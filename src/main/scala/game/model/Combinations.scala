@@ -5,8 +5,8 @@ sealed trait Combinations { val name: String }
 sealed trait SimpleCombinations  extends Combinations
 sealed trait ComplexCombinations extends Combinations
 
-case object Combinations {
-  object SimpleCombinations {
+object Combinations {
+  case object SimpleCombinations {
     case object Nothing extends SimpleCombinations {
       val name = "Nothing"
     }
@@ -36,7 +36,7 @@ case object Combinations {
     }
   }
 
-  object ComplexCombinations {
+  case object ComplexCombinations {
     case object ThreeOfAKind extends ComplexCombinations {
       val name = "ThreeOfAKind"
     }

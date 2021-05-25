@@ -3,6 +3,7 @@ package game.model
 import io.circe._
 
 sealed trait DiceSide { val value: Int }
+
 object DiceSide {
   case object One  extends DiceSide { val value = 1 }
   case object Two  extends DiceSide { val value = 2 }

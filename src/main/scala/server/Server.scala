@@ -12,7 +12,7 @@ import server.model._
 
 object Server {
   def stream[F[_]: ConcurrentEffect: Timer: ContextShift](
-    chatState: Ref[F, GameState],
+    gameState: Ref[F, GameState],
     queue: Queue[F, InputMessage],
     topic: Topic[F, OutputMessage]
   ): Stream[F, ExitCode] =
@@ -20,7 +20,7 @@ object Server {
       .bindHttp(8080)
       .withHttpApp(
         Router(
-          "/" -> Routes.routes[F](chatState, queue, topic)
+          "/" -> Routes.routes[F](gameState, queue, topic)
         ).orNotFound
       )
       .serve
