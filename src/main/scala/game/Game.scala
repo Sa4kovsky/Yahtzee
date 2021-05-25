@@ -56,6 +56,24 @@ object Game extends Game {
       )
   }
 
+  private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
+    x match {
+      case Some(value) => Some(value)
+      case None =>
+        Random.nextInt(6) + 1 match {
+          case 1 => Some(DiceSide.One)
+          case 2 => Some(DiceSide.Two)
+          case 3 => Some(DiceSide.Tree)
+          case 4 => Some(DiceSide.Four)
+          case 5 => Some(DiceSide.Five)
+          case 6 => Some(DiceSide.Six)
+          case _ => None
+        }
+    }
+
+  private def countUser(room: Room)(implicit state: GameState): List[User] =
+    state.roomMembers.getOrElse(room, List()).toList
+
   override def game(dice: String, bettor: Player, room: Room, user: User, combinations: String)(implicit
     state: GameState
   ): (GameState, Seq[OutputMessage]) =
@@ -98,21 +116,6 @@ object Game extends Game {
       (state, Seq(SendToUser(user, Message.GameErrorMessage.RollDice.text)))
   }
 
-  private def diceRoll(x: Option[DiceSide]): Option[DiceSide] =
-    x match {
-      case Some(value) => Some(value)
-      case None =>
-        Random.nextInt(6) + 1 match {
-          case 1 => Some(DiceSide.One)
-          case 2 => Some(DiceSide.Two)
-          case 3 => Some(DiceSide.Tree)
-          case 4 => Some(DiceSide.Four)
-          case 5 => Some(DiceSide.Five)
-          case 6 => Some(DiceSide.Six)
-          case _ => None
-        }
-    }
-
   private def increaseRound(dice: Dice, bettor: Player, room: Room, user: User, combinations: String)(implicit
     state: GameState
   ): (GameState, Seq[OutputMessage]) = {
@@ -147,7 +150,7 @@ object Game extends Game {
     } else (state, Seq(SendToUser(user, Message.GameErrorMessage.ImpossibleCombination.text)))
   }
 
-  private def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
+  private[game] def calcWeight(player: Player, combinations: String, dice: Dice): (Combinations, Int) = {
     if (chekCombinations(player, combinations))
       if (checkDice(dice).isDefined) {
         val values =
@@ -247,9 +250,6 @@ object Game extends Game {
     } else
       Message.GameErrorMessage.NotFinished.text
   }
-
-  private def countUser(room: Room)(implicit state: GameState): List[User] =
-    state.roomMembers.getOrElse(room, List()).toList
 
   private def amountWeight(key: User, player: Player): Map[User, Int] = {
     val c = player.combinationsDice.foldLeft(0)((x, player) => x + player.weight)

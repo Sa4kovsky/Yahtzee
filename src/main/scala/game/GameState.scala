@@ -16,7 +16,7 @@ object GameState {
 
   def apply(): GameState = GameState(Map.empty, Map.empty, Map.empty)
 
-  def process[F[_]: Monad](msg: InputMessage): State[GameState, Seq[OutputMessage]] =
+  def process(msg: InputMessage): State[GameState, Seq[OutputMessage]] =
     msg match {
       case Help(user) =>
         State.pure(Seq(SendToUser(user, InputMessage.HelpText)))
