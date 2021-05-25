@@ -218,7 +218,14 @@ object Game extends Game {
     state.roomMembers.getOrElse(room, List()).toList
 
   private def amountWeight(key: User, player: Player): Map[User, Int] = {
-    val c = player.combinationsDice.foldLeft(0)((x, player) => x + player.weight)
-    Map(key -> c)
+    val simple = player.combinationsDice
+      .filter(_.combinations.isInstanceOf[SimpleCombinations])
+      .foldLeft(0)((x, player) => x + player.weight)
+    val complex = player.combinationsDice
+      .filter(_.combinations.isInstanceOf[ComplexCombinations])
+      .foldLeft(0)((x, player) => x + player.weight)
+    if (simple > 63)
+      Map(key    -> (simple + complex + 35))
+    else Map(key -> (simple + complex))
   }
 }
